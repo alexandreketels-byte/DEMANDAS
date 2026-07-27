@@ -262,6 +262,89 @@
     border-color:var(--alta);
   }
 
+  @keyframes blink-card{
+    0%, 100% { box-shadow: 0 0 0 2px var(--alta); background: var(--panel-2); }
+    50%      { box-shadow: 0 0 0 2px var(--alta); background: rgba(224,80,58,0.28); }
+  }
+
+  .card.alarming{
+    animation: blink-card 1s infinite;
+    border-left-color: var(--alta) !important;
+  }
+
+  .add-form input[type="datetime-local"]{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:.6rem .7rem;
+    border-radius:8px;
+    font-size:.82rem;
+    font-family:'Inter',sans-serif;
+    color-scheme: dark;
+  }
+
+  .reminder-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:.4rem;
+    margin-top:.4rem;
+    flex-wrap:wrap;
+  }
+
+  .reminder-badge{
+    display:flex;
+    align-items:center;
+    gap:.3rem;
+    font-family:'JetBrains Mono',monospace;
+    font-size:.66rem;
+    color:var(--muted);
+  }
+
+  .reminder-badge.due{
+    color:var(--alta);
+    font-weight:600;
+  }
+
+  .reminder-edit-row{
+    display:flex;
+    gap:.4rem;
+    align-items:center;
+    margin-top:.5rem;
+    flex-wrap:wrap;
+  }
+
+  .reminder-edit-row input[type="datetime-local"]{
+    background:var(--panel);
+    border:1px solid var(--nova);
+    color:var(--text);
+    padding:.35rem .5rem;
+    border-radius:6px;
+    font-size:.76rem;
+    font-family:'Inter',sans-serif;
+    color-scheme: dark;
+  }
+
+  .alarm-off-btn{
+    display:none;
+    background:var(--alta) !important;
+    color:#fff !important;
+    border-color:var(--alta) !important;
+    font-weight:600 !important;
+    width:auto !important;
+    padding:0 .5rem !important;
+    gap:.3rem;
+    font-size:.68rem !important;
+  }
+
+  .card.alarming .alarm-off-btn{
+    display:flex;
+  }
+
+  .card.alarming .reminder-edit-btn{
+    display:none;
+  }
+
   .status-line{
     max-width:1200px;
     margin:.7rem auto 0;
@@ -289,6 +372,7 @@
         <option value="alta">Prioridade alta</option>
         <option value="fim">Finalizados</option>
       </select>
+      <input type="datetime-local" id="reminder-input" title="Lembrete (opcional)">
       <button type="submit">Adicionar</button>
     </form>
   </div>
@@ -306,10 +390,25 @@ const COLUMNS = [
 ];
 
 // COLE AQUI a URL do seu Web App do Apps Script (termina em /exec)
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyOu5-g-MlH2l35JtYGrPgXEmh9ajbUnQ4zqtndelAoTS-hy4yF1winC2zuyFBS-qbZQw/exec';
+const APPS_SCRIPT_URL = 'COLE_AQUI_A_URL_DO_APPS_SCRIPT';
 
 let items = [];
 let editingId = null;
+let reminderEditId = null;
+let titleBlinkOn = false;
+const ORIGINAL_TITLE = document.title;
+
+function fmtReminder(ts){
+  const d = new Date(ts);
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) + ' ' +
+         d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+
+function toDatetimeLocalValue(ts){
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 function uid(){
   return 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -344,7 +443,12 @@ async function loadItems(){
   try{
     const res = await fetch(APPS_SCRIPT_URL);
     const data = await res.json();
-    items = (data.items || []).map(i => ({ ...i, createdAt: Number(i.createdAt) }));
+    items = (data.items || []).map(i => ({
+      ...i,
+      createdAt: Number(i.createdAt),
+      reminderAt: i.reminderAt ? Number(i.reminderAt) : null,
+      reminderDismissed: i.reminderDismissed === true || i.reminderDismissed === 'TRUE' || i.reminderDismissed === 'true'
+    }));
     items.sort((a,b) => b.createdAt - a.createdAt);
     setStatus('');
   }catch(e){
@@ -354,16 +458,70 @@ async function loadItems(){
   render();
 }
 
-async function addItem(text, column){
-  const newItem = { id: uid(), text: text, column: column, createdAt: Date.now() };
+async function addItem(text, column, reminderAt){
+  const newItem = { id: uid(), text: text, column: column, createdAt: Date.now(), reminderAt: reminderAt || null, reminderDismissed: false };
   items.unshift(newItem);
   render();
   try{
-    await apiPost({ action:'add', id:newItem.id, text:newItem.text, column:newItem.column, createdAt:newItem.createdAt });
+    await apiPost({ action:'add', id:newItem.id, text:newItem.text, column:newItem.column, createdAt:newItem.createdAt, reminderAt:newItem.reminderAt, reminderDismissed:false });
   }catch(e){
     setStatus('Erro ao salvar. Verifique a conexão.', true);
   }
 }
+
+function startReminderEdit(id){
+  reminderEditId = id;
+  editingId = null;
+  render();
+}
+
+function cancelReminderEdit(){
+  reminderEditId = null;
+  render();
+}
+
+async function commitReminder(id, dtValue){
+  const idx = items.findIndex(i => i.id === id);
+  reminderEditId = null;
+  if(idx === -1){ render(); return; }
+  const ts = dtValue ? new Date(dtValue).getTime() : null;
+  items[idx].reminderAt = ts;
+  items[idx].reminderDismissed = false;
+  render();
+  try{
+    await apiPost({ action:'update', id:id, reminderAt: ts, reminderDismissed:false });
+  }catch(e){
+    setStatus('Erro ao salvar lembrete.', true);
+  }
+}
+
+async function dismissReminder(id){
+  const idx = items.findIndex(i => i.id === id);
+  if(idx === -1) return;
+  items[idx].reminderDismissed = true;
+  render();
+  try{
+    await apiPost({ action:'update', id:id, reminderDismissed:true });
+  }catch(e){
+    setStatus('Erro ao salvar. Verifique a conexão.', true);
+  }
+}
+
+function updateAlarmStates(){
+  let anyDue = false;
+  items.forEach(item => {
+    if(!item.reminderAt || item.reminderDismissed) return;
+    const due = Date.now() >= item.reminderAt;
+    if(due){
+      anyDue = true;
+      const cardEl = document.querySelector('.card[data-id="' + item.id + '"]');
+      if(cardEl) cardEl.classList.add('alarming');
+    }
+  });
+  titleBlinkOn = !titleBlinkOn;
+  document.title = anyDue ? (titleBlinkOn ? '⏰ Lembrete!' : ORIGINAL_TITLE) : ORIGINAL_TITLE;
+}
+setInterval(updateAlarmStates, 1000);
 
 async function moveItem(id, direction){
   const idx = items.findIndex(i => i.id === id);
@@ -453,9 +611,51 @@ function render(){
     }
 
     colItems.forEach(item => {
+      const isDue = item.reminderAt && !item.reminderDismissed && Date.now() >= item.reminderAt;
       const card = document.createElement('div');
-      card.className = 'card';
+      card.className = 'card' + (isDue ? ' alarming' : '');
+      card.dataset.id = item.id;
       card.style.borderLeftColor = col.color;
+
+      if(reminderEditId === item.id){
+        const remRow = document.createElement('div');
+        remRow.className = 'reminder-edit-row';
+
+        const dtInput = document.createElement('input');
+        dtInput.type = 'datetime-local';
+        if(item.reminderAt) dtInput.value = toDatetimeLocalValue(item.reminderAt);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = '✓';
+        saveBtn.title = 'Salvar lembrete';
+        saveBtn.onclick = () => commitReminder(item.id, dtInput.value);
+
+        const clearBtn = document.createElement('button');
+        clearBtn.textContent = '✕ limpar';
+        clearBtn.title = 'Remover lembrete';
+        clearBtn.style.width = 'auto';
+        clearBtn.style.padding = '0 .5rem';
+        clearBtn.style.fontSize = '.7rem';
+        clearBtn.onclick = () => commitReminder(item.id, '');
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = '↩';
+        cancelBtn.title = 'Cancelar';
+        cancelBtn.onclick = cancelReminderEdit;
+
+        remRow.appendChild(dtInput);
+        remRow.appendChild(saveBtn);
+        remRow.appendChild(clearBtn);
+        remRow.appendChild(cancelBtn);
+
+        const textEl0 = document.createElement('p');
+        textEl0.className = 'card-text';
+        textEl0.textContent = item.text;
+        card.appendChild(textEl0);
+        card.appendChild(remRow);
+        body.appendChild(card);
+        return;
+      }
 
       if(editingId === item.id){
         const textarea = document.createElement('textarea');
@@ -520,6 +720,20 @@ function render(){
         editBtn.onclick = () => startEdit(item.id);
         actions.appendChild(editBtn);
 
+        const remBtn = document.createElement('button');
+        remBtn.textContent = '🔔';
+        remBtn.title = item.reminderAt ? 'Editar lembrete' : 'Definir lembrete';
+        remBtn.className = 'reminder-edit-btn';
+        remBtn.onclick = () => startReminderEdit(item.id);
+        actions.appendChild(remBtn);
+
+        const offBtn = document.createElement('button');
+        offBtn.textContent = '🔕 Desativar';
+        offBtn.title = 'Desativar alarme';
+        offBtn.className = 'alarm-off-btn';
+        offBtn.onclick = () => dismissReminder(item.id);
+        actions.appendChild(offBtn);
+
         const delBtn = document.createElement('button');
         delBtn.textContent = '×';
         delBtn.title = 'Excluir';
@@ -531,6 +745,16 @@ function render(){
 
         meta.appendChild(actions);
         card.appendChild(meta);
+
+        if(item.reminderAt){
+          const remRow = document.createElement('div');
+          remRow.className = 'reminder-row';
+          const badge = document.createElement('span');
+          badge.className = 'reminder-badge' + (isDue ? ' due' : '');
+          badge.textContent = (isDue ? '⏰ ' : '🔔 ') + fmtReminder(item.reminderAt);
+          remRow.appendChild(badge);
+          card.appendChild(remRow);
+        }
       }
 
       body.appendChild(card);
@@ -545,10 +769,13 @@ document.getElementById('add-form').addEventListener('submit', function(e){
   e.preventDefault();
   const input = document.getElementById('demand-input');
   const select = document.getElementById('column-select');
+  const reminderInput = document.getElementById('reminder-input');
   const text = input.value.trim();
   if(!text) return;
-  addItem(text, select.value);
+  const reminderAt = reminderInput.value ? new Date(reminderInput.value).getTime() : null;
+  addItem(text, select.value, reminderAt);
   input.value = '';
+  reminderInput.value = '';
   input.focus();
 });
 
