@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quadro de Demandas</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg:#12151b;
+    --panel:#1a1f28;
+    --panel-2:#1f2530;
+    --border:#2a3140;
+    --text:#e6e9ef;
+    --muted:#8891a1;
+    --nova:#5b8def;
+    --baixa:#4f9d6e;
+    --alta:#e0503a;
+    --fim:#6b7280;
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    padding-bottom:3rem;
+  }
+
+  .topbar{
+    background:var(--panel);
+    border-bottom:1px solid var(--border);
+    padding:1.25rem 1.5rem;
+    position:sticky;
+    top:0;
+    z-index:10;
+  }
+
+  .topbar-inner{
+    max-width:1200px;
+    margin:0 auto;
+  }
+
+  .brand{
+    display:flex;
+    align-items:baseline;
+    gap:.6rem;
+    margin-bottom:1rem;
+  }
+
+  .brand h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:1.3rem;
+    margin:0;
+    letter-spacing:-.01em;
+  }
+
+  .brand .clock{
+    font-family:'JetBrains Mono',monospace;
+    font-size:.72rem;
+    color:var(--muted);
+  }
+
+  .add-form{
+    display:flex;
+    gap:.6rem;
+    flex-wrap:wrap;
+  }
+
+  .add-form input[type="text"]{
+    flex:1;
+    min-width:220px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:.65rem .8rem;
+    border-radius:8px;
+    font-size:.9rem;
+    font-family:'Inter',sans-serif;
+  }
+
+  .add-form input[type="text"]:focus{
+    outline:none;
+    border-color:var(--nova);
+  }
+
+  .add-form select{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:.65rem .8rem;
+    border-radius:8px;
+    font-size:.85rem;
+    font-family:'Inter',sans-serif;
+  }
+
+  .add-form button{
+    background:var(--nova);
+    color:#0c1a33;
+    border:none;
+    padding:.65rem 1.1rem;
+    border-radius:8px;
+    font-weight:500;
+    font-size:.9rem;
+    cursor:pointer;
+    font-family:'Inter',sans-serif;
+  }
+
+  .add-form button:active{
+    transform:scale(0.98);
+  }
+
+  .board{
+    max-width:1200px;
+    margin:1.5rem auto 0;
+    padding:0 1.5rem;
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:1rem;
+  }
+
+  @media (max-width:900px){
+    .board{grid-template-columns:1fr;}
+  }
+
+  .col{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    min-height:120px;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .col-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:.85rem 1rem;
+    border-bottom:1px solid var(--border);
+  }
+
+  .col-head-left{
+    display:flex;
+    align-items:center;
+    gap:.55rem;
+  }
+
+  .dot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    flex-shrink:0;
+  }
+
+  .col-title{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:.85rem;
+    letter-spacing:.01em;
+  }
+
+  .col-count{
+    font-family:'JetBrains Mono',monospace;
+    font-size:.72rem;
+    color:var(--muted);
+    background:var(--panel-2);
+    padding:.15rem .5rem;
+    border-radius:5px;
+  }
+
+  .col-body{
+    padding:.7rem;
+    display:flex;
+    flex-direction:column;
+    gap:.6rem;
+    flex:1;
+  }
+
+  .empty-hint{
+    color:var(--muted);
+    font-size:.78rem;
+    text-align:center;
+    padding:1.2rem .5rem;
+  }
+
+  .card{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-left:3px solid transparent;
+    border-radius:0 8px 8px 0;
+    padding:.7rem .8rem;
+  }
+
+  .card-text{
+    font-size:.87rem;
+    line-height:1.45;
+    margin:0 0 .5rem;
+    word-break:break-word;
+    white-space:pre-wrap;
+  }
+
+  .card-edit-input{
+    width:100%;
+    background:var(--panel);
+    border:1px solid var(--nova);
+    color:var(--text);
+    padding:.4rem .5rem;
+    border-radius:6px;
+    font-size:.87rem;
+    font-family:'Inter',sans-serif;
+    margin-bottom:.5rem;
+    resize:vertical;
+  }
+
+  .card-meta{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:.4rem;
+  }
+
+  .card-date{
+    font-family:'JetBrains Mono',monospace;
+    font-size:.66rem;
+    color:var(--muted);
+  }
+
+  .card-actions{
+    display:flex;
+    gap:.3rem;
+  }
+
+  .card-actions button{
+    background:transparent;
+    border:1px solid var(--border);
+    color:var(--muted);
+    width:24px;
+    height:24px;
+    border-radius:5px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:.75rem;
+    line-height:1;
+    padding:0;
+  }
+
+  .card-actions button:hover{
+    color:var(--text);
+    border-color:var(--muted);
+  }
+
+  .card-actions button.danger:hover{
+    color:var(--alta);
+    border-color:var(--alta);
+  }
+
+  .status-line{
+    max-width:1200px;
+    margin:.7rem auto 0;
+    padding:0 1.5rem;
+    font-family:'JetBrains Mono',monospace;
+    font-size:.68rem;
+    color:var(--muted);
+    min-height:1rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <h1>Quadro de demandas</h1>
+      <span class="clock" id="clock"></span>
+    </div>
+    <form class="add-form" id="add-form">
+      <input type="text" id="demand-input" placeholder="Descreva a demanda..." autocomplete="off" required>
+      <select id="column-select">
+        <option value="nova">Demanda nova</option>
+        <option value="baixa">Prioridade baixa</option>
+        <option value="alta">Prioridade alta</option>
+        <option value="fim">Finalizados</option>
+      </select>
+      <button type="submit">Adicionar</button>
+    </form>
+  </div>
+</div>
+
+<div class="board" id="board"></div>
+<div class="status-line" id="status-line"></div>
+
+<script>
+const COLUMNS = [
+  { key:'nova',  title:'Demanda nova',      color:'var(--nova)'  },
+  { key:'baixa', title:'Prioridade baixa',   color:'var(--baixa)' },
+  { key:'alta',  title:'Prioridade alta',    color:'var(--alta)'  },
+  { key:'fim',   title:'Finalizados',        color:'var(--fim)'   }
+];
+
+// COLE AQUI a URL do seu Web App do Apps Script (termina em /exec)
+const APPS_SCRIPT_URL = 'COLE_AQUI_A_URL_DO_APPS_SCRIPT';
+
+let items = [];
+let editingId = null;
+
+function uid(){
+  return 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+}
+
+function fmtDate(ts){
+  const d = new Date(ts);
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) + ' ' +
+         d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+
+function setStatus(msg, isError){
+  const el = document.getElementById('status-line');
+  el.textContent = msg || '';
+  el.style.color = isError ? 'var(--alta)' : 'var(--muted)';
+  if(msg && !isError){
+    setTimeout(() => { if(el.textContent === msg) el.textContent = ''; }, 2500);
+  }
+}
+
+async function apiPost(payload){
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  if(!res.ok) throw new Error('Falha na requisição');
+  return res.json();
+}
+
+async function loadItems(){
+  setStatus('Carregando...');
+  try{
+    const res = await fetch(APPS_SCRIPT_URL);
+    const data = await res.json();
+    items = (data.items || []).map(i => ({ ...i, createdAt: Number(i.createdAt) }));
+    items.sort((a,b) => b.createdAt - a.createdAt);
+    setStatus('');
+  }catch(e){
+    setStatus('Não foi possível carregar. Verifique a URL do Apps Script.', true);
+    items = [];
+  }
+  render();
+}
+
+async function addItem(text, column){
+  const newItem = { id: uid(), text: text, column: column, createdAt: Date.now() };
+  items.unshift(newItem);
+  render();
+  try{
+    await apiPost({ action:'add', id:newItem.id, text:newItem.text, column:newItem.column, createdAt:newItem.createdAt });
+  }catch(e){
+    setStatus('Erro ao salvar. Verifique a conexão.', true);
+  }
+}
+
+async function moveItem(id, direction){
+  const idx = items.findIndex(i => i.id === id);
+  if(idx === -1) return;
+  const colIdx = COLUMNS.findIndex(c => c.key === items[idx].column);
+  const newColIdx = colIdx + direction;
+  if(newColIdx < 0 || newColIdx >= COLUMNS.length) return;
+  const newColumn = COLUMNS[newColIdx].key;
+  items[idx].column = newColumn;
+  render();
+  try{
+    await apiPost({ action:'update', id:id, column:newColumn });
+  }catch(e){
+    setStatus('Erro ao salvar. Verifique a conexão.', true);
+  }
+}
+
+async function deleteItem(id){
+  const backup = items;
+  items = items.filter(i => i.id !== id);
+  render();
+  try{
+    await apiPost({ action:'delete', id:id });
+  }catch(e){
+    items = backup;
+    setStatus('Erro ao excluir. Verifique a conexão.', true);
+    render();
+  }
+}
+
+function startEdit(id){
+  editingId = id;
+  render();
+}
+
+async function commitEdit(id, newText){
+  const idx = items.findIndex(i => i.id === id);
+  const text = newText.trim();
+  editingId = null;
+  if(idx !== -1 && text){
+    items[idx].text = text;
+    render();
+    try{
+      await apiPost({ action:'update', id:id, text:text });
+    }catch(e){
+      setStatus('Erro ao salvar. Verifique a conexão.', true);
+    }
+  } else {
+    render();
+  }
+}
+
+function cancelEdit(){
+  editingId = null;
+  render();
+}
+
+function render(){
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+
+  COLUMNS.forEach((col, colIdx) => {
+    const colItems = items.filter(i => i.column === col.key);
+
+    const colEl = document.createElement('div');
+    colEl.className = 'col';
+
+    const head = document.createElement('div');
+    head.className = 'col-head';
+    head.innerHTML = `
+      <div class="col-head-left">
+        <span class="dot" style="background:${col.color}"></span>
+        <span class="col-title">${col.title}</span>
+      </div>
+      <span class="col-count">${colItems.length}</span>
+    `;
+    colEl.appendChild(head);
+
+    const body = document.createElement('div');
+    body.className = 'col-body';
+
+    if(colItems.length === 0){
+      const hint = document.createElement('div');
+      hint.className = 'empty-hint';
+      hint.textContent = 'Nenhuma demanda aqui';
+      body.appendChild(hint);
+    }
+
+    colItems.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.borderLeftColor = col.color;
+
+      if(editingId === item.id){
+        const textarea = document.createElement('textarea');
+        textarea.className = 'card-edit-input';
+        textarea.value = item.text;
+        textarea.rows = 3;
+        card.appendChild(textarea);
+
+        const actions = document.createElement('div');
+        actions.className = 'card-actions';
+        actions.style.justifyContent = 'flex-end';
+
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = '✓';
+        saveBtn.title = 'Salvar';
+        saveBtn.onclick = () => commitEdit(item.id, textarea.value);
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = '✕';
+        cancelBtn.title = 'Cancelar';
+        cancelBtn.onclick = cancelEdit;
+
+        actions.appendChild(saveBtn);
+        actions.appendChild(cancelBtn);
+        card.appendChild(actions);
+      } else {
+        const textEl = document.createElement('p');
+        textEl.className = 'card-text';
+        textEl.textContent = item.text;
+        card.appendChild(textEl);
+
+        const meta = document.createElement('div');
+        meta.className = 'card-meta';
+
+        const dateEl = document.createElement('span');
+        dateEl.className = 'card-date';
+        dateEl.textContent = fmtDate(item.createdAt);
+        meta.appendChild(dateEl);
+
+        const actions = document.createElement('div');
+        actions.className = 'card-actions';
+
+        if(colIdx > 0){
+          const prevBtn = document.createElement('button');
+          prevBtn.textContent = '‹';
+          prevBtn.title = 'Mover para ' + COLUMNS[colIdx-1].title;
+          prevBtn.onclick = () => moveItem(item.id, -1);
+          actions.appendChild(prevBtn);
+        }
+
+        if(colIdx < COLUMNS.length - 1){
+          const nextBtn = document.createElement('button');
+          nextBtn.textContent = '›';
+          nextBtn.title = 'Mover para ' + COLUMNS[colIdx+1].title;
+          nextBtn.onclick = () => moveItem(item.id, 1);
+          actions.appendChild(nextBtn);
+        }
+
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '✎';
+        editBtn.title = 'Editar';
+        editBtn.onclick = () => startEdit(item.id);
+        actions.appendChild(editBtn);
+
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '×';
+        delBtn.title = 'Excluir';
+        delBtn.className = 'danger';
+        delBtn.onclick = () => {
+          if(confirm('Excluir esta demanda?')) deleteItem(item.id);
+        };
+        actions.appendChild(delBtn);
+
+        meta.appendChild(actions);
+        card.appendChild(meta);
+      }
+
+      body.appendChild(card);
+    });
+
+    colEl.appendChild(body);
+    board.appendChild(colEl);
+  });
+}
+
+document.getElementById('add-form').addEventListener('submit', function(e){
+  e.preventDefault();
+  const input = document.getElementById('demand-input');
+  const select = document.getElementById('column-select');
+  const text = input.value.trim();
+  if(!text) return;
+  addItem(text, select.value);
+  input.value = '';
+  input.focus();
+});
+
+function updateClock(){
+  const el = document.getElementById('clock');
+  if(el) el.textContent = new Date().toLocaleString('pt-BR');
+}
+updateClock();
+setInterval(updateClock, 1000 * 30);
+
+loadItems();
+</script>
+
+</body>
+</html>
