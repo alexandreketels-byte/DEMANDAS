@@ -345,6 +345,153 @@
     display:none;
   }
 
+  .archive-toggle{
+    margin-left:auto;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--muted);
+    padding:.35rem .7rem;
+    border-radius:7px;
+    font-size:.78rem;
+    font-family:'Inter',sans-serif;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:.4rem;
+  }
+
+  .archive-toggle:hover{
+    color:var(--text);
+    border-color:var(--muted);
+  }
+
+  .archive-toggle span{
+    font-family:'JetBrains Mono',monospace;
+    font-size:.7rem;
+    background:var(--panel);
+    padding:.1rem .4rem;
+    border-radius:5px;
+  }
+
+  .archive-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(8,10,14,.7);
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:4vh 1rem;
+    z-index:50;
+  }
+
+  .archive-overlay.hidden{
+    display:none;
+  }
+
+  .archive-panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    width:100%;
+    max-width:640px;
+    max-height:88vh;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+
+  .archive-panel-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:1rem 1.2rem;
+    border-bottom:1px solid var(--border);
+  }
+
+  .archive-panel-head .col-title{
+    font-size:1rem;
+  }
+
+  .archive-panel-head button{
+    background:transparent;
+    border:1px solid var(--border);
+    color:var(--muted);
+    width:26px;
+    height:26px;
+    border-radius:6px;
+    cursor:pointer;
+  }
+
+  .archive-list{
+    padding:.8rem;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:.55rem;
+  }
+
+  .archive-empty{
+    color:var(--muted);
+    font-size:.82rem;
+    text-align:center;
+    padding:1.5rem;
+  }
+
+  .archive-item{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:.65rem .8rem;
+  }
+
+  .archive-item-text{
+    font-size:.85rem;
+    line-height:1.4;
+    margin:0 0 .5rem;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+
+  .archive-item-meta{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:.5rem;
+    flex-wrap:wrap;
+  }
+
+  .archive-item-tag{
+    font-family:'JetBrains Mono',monospace;
+    font-size:.66rem;
+    color:var(--muted);
+  }
+
+  .archive-item-actions{
+    display:flex;
+    gap:.4rem;
+  }
+
+  .archive-item-actions button{
+    background:transparent;
+    border:1px solid var(--border);
+    color:var(--muted);
+    padding:.3rem .6rem;
+    border-radius:6px;
+    font-size:.72rem;
+    cursor:pointer;
+    font-family:'Inter',sans-serif;
+  }
+
+  .archive-item-actions button:hover{
+    color:var(--text);
+    border-color:var(--muted);
+  }
+
+  .archive-item-actions button.danger:hover{
+    color:var(--alta);
+    border-color:var(--alta);
+  }
+
   .status-line{
     max-width:1200px;
     margin:.7rem auto 0;
@@ -363,6 +510,7 @@
     <div class="brand">
       <h1>Quadro de demandas</h1>
       <span class="clock" id="clock"></span>
+      <button type="button" class="archive-toggle" id="archive-toggle-btn">📁 Arquivo <span id="archive-count">0</span></button>
     </div>
     <form class="add-form" id="add-form">
       <input type="text" id="demand-input" placeholder="Descreva a demanda..." autocomplete="off" required>
@@ -380,6 +528,16 @@
 
 <div class="board" id="board"></div>
 <div class="status-line" id="status-line"></div>
+
+<div class="archive-overlay hidden" id="archive-overlay">
+  <div class="archive-panel">
+    <div class="archive-panel-head">
+      <span class="col-title">Arquivo</span>
+      <button type="button" id="archive-close-btn">✕</button>
+    </div>
+    <div class="archive-list" id="archive-list"></div>
+  </div>
+</div>
 
 <script>
 const COLUMNS = [
@@ -447,7 +605,8 @@ async function loadItems(){
       ...i,
       createdAt: Number(i.createdAt),
       reminderAt: i.reminderAt ? Number(i.reminderAt) : null,
-      reminderDismissed: i.reminderDismissed === true || i.reminderDismissed === 'TRUE' || i.reminderDismissed === 'true'
+      reminderDismissed: i.reminderDismissed === true || i.reminderDismissed === 'TRUE' || i.reminderDismissed === 'true',
+      archived: i.archived === true || i.archived === 'TRUE' || i.archived === 'true'
     }));
     items.sort((a,b) => b.createdAt - a.createdAt);
     setStatus('');
@@ -459,15 +618,110 @@ async function loadItems(){
 }
 
 async function addItem(text, column, reminderAt){
-  const newItem = { id: uid(), text: text, column: column, createdAt: Date.now(), reminderAt: reminderAt || null, reminderDismissed: false };
+  const newItem = { id: uid(), text: text, column: column, createdAt: Date.now(), reminderAt: reminderAt || null, reminderDismissed: false, archived: false };
   items.unshift(newItem);
   render();
   try{
-    await apiPost({ action:'add', id:newItem.id, text:newItem.text, column:newItem.column, createdAt:newItem.createdAt, reminderAt:newItem.reminderAt, reminderDismissed:false });
+    await apiPost({ action:'add', id:newItem.id, text:newItem.text, column:newItem.column, createdAt:newItem.createdAt, reminderAt:newItem.reminderAt, reminderDismissed:false, archived:false });
   }catch(e){
     setStatus('Erro ao salvar. Verifique a conexão.', true);
   }
 }
+
+async function archiveItem(id){
+  const idx = items.findIndex(i => i.id === id);
+  if(idx === -1) return;
+  items[idx].archived = true;
+  render();
+  try{
+    await apiPost({ action:'update', id:id, archived:true });
+  }catch(e){
+    setStatus('Erro ao arquivar. Verifique a conexão.', true);
+  }
+}
+
+async function restoreItem(id){
+  const idx = items.findIndex(i => i.id === id);
+  if(idx === -1) return;
+  items[idx].archived = false;
+  render();
+  renderArchiveList();
+  try{
+    await apiPost({ action:'update', id:id, archived:false });
+  }catch(e){
+    setStatus('Erro ao restaurar. Verifique a conexão.', true);
+  }
+}
+
+function renderArchiveList(){
+  const list = document.getElementById('archive-list');
+  const countEl = document.getElementById('archive-count');
+  const archived = items.filter(i => i.archived);
+  countEl.textContent = archived.length;
+  list.innerHTML = '';
+
+  if(archived.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'archive-empty';
+    empty.textContent = 'Nenhuma demanda arquivada';
+    list.appendChild(empty);
+    return;
+  }
+
+  archived.slice().sort((a,b) => b.createdAt - a.createdAt).forEach(item => {
+    const col = COLUMNS.find(c => c.key === item.column) || COLUMNS[0];
+    const row = document.createElement('div');
+    row.className = 'archive-item';
+
+    const textEl = document.createElement('p');
+    textEl.className = 'archive-item-text';
+    textEl.textContent = item.text;
+    row.appendChild(textEl);
+
+    const meta = document.createElement('div');
+    meta.className = 'archive-item-meta';
+
+    const tag = document.createElement('span');
+    tag.className = 'archive-item-tag';
+    tag.textContent = col.title + ' · ' + fmtDate(item.createdAt);
+    meta.appendChild(tag);
+
+    const actions = document.createElement('div');
+    actions.className = 'archive-item-actions';
+
+    const restoreBtn = document.createElement('button');
+    restoreBtn.textContent = '↩ Restaurar';
+    restoreBtn.onclick = () => restoreItem(item.id);
+    actions.appendChild(restoreBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '🗑 Excluir';
+    delBtn.className = 'danger';
+    delBtn.onclick = () => {
+      if(confirm('Excluir esta demanda definitivamente?')) deleteItem(item.id);
+    };
+    actions.appendChild(delBtn);
+
+    meta.appendChild(actions);
+    row.appendChild(meta);
+    list.appendChild(row);
+  });
+}
+
+function openArchive(){
+  renderArchiveList();
+  document.getElementById('archive-overlay').classList.remove('hidden');
+}
+
+function closeArchive(){
+  document.getElementById('archive-overlay').classList.add('hidden');
+}
+
+document.getElementById('archive-toggle-btn').addEventListener('click', openArchive);
+document.getElementById('archive-close-btn').addEventListener('click', closeArchive);
+document.getElementById('archive-overlay').addEventListener('click', function(e){
+  if(e.target === this) closeArchive();
+});
 
 function startReminderEdit(id){
   reminderEditId = id;
@@ -583,8 +837,11 @@ function render(){
   const board = document.getElementById('board');
   board.innerHTML = '';
 
+  const countEl = document.getElementById('archive-count');
+  if(countEl) countEl.textContent = items.filter(i => i.archived).length;
+
   COLUMNS.forEach((col, colIdx) => {
-    const colItems = items.filter(i => i.column === col.key);
+    const colItems = items.filter(i => i.column === col.key && !i.archived);
 
     const colEl = document.createElement('div');
     colEl.className = 'col';
@@ -733,6 +990,12 @@ function render(){
         offBtn.className = 'alarm-off-btn';
         offBtn.onclick = () => dismissReminder(item.id);
         actions.appendChild(offBtn);
+
+        const archiveBtn = document.createElement('button');
+        archiveBtn.textContent = '📦';
+        archiveBtn.title = 'Arquivar';
+        archiveBtn.onclick = () => archiveItem(item.id);
+        actions.appendChild(archiveBtn);
 
         const delBtn = document.createElement('button');
         delBtn.textContent = '×';
